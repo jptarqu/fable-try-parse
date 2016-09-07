@@ -8,30 +8,31 @@ open Fable.AST
 //fsc ./plugins/try-parse/Fable.Plugins.IntTryParse.fsx --target:library --out:./plugins/try-parse/Fable.Plugins.IntTryParse.dll
 
 type IntTryParsePlugin() =
+    let handleTryParse _com (info: Fable.ApplyInfo)  jsCall = 
+        let numToParse =
+            match info.args with
+            | [numToParse;valRef] -> numToParse
+            | _ ->
+                let argsMs = sprintf "Unexpected arg count for TryParse: %A"  info.args
+                failwith argsMs
+        let emitExpr =
+            Fable.Emit("isNaN("+jsCall+"($0)) ? [0,false] : [true, "+jsCall+"($0)]")
+            |> Fable.Value
+        Fable.Apply(emitExpr, [numToParse], Fable.ApplyMeth, info.returnType, info.range)
+        |> Some
+
     interface IReplacePlugin with
         member x.TryReplace _com (info: Fable.ApplyInfo) =
             match info.ownerFullName with
             | "System.Int32" ->
                 match info.methodName with
-               
                 | "TryParse" ->
-                    let intConst x =
-                        Fable.NumberConst (U2.Case1 x, Int32) |> Fable.Value
-                    let numToParse =
-                        match info.args with
-                        | [numToParse;valRef] -> numToParse
-                        | _ ->
-                            let argsMs = sprintf "Unexpected arg count for TryParse: %A"  info.args
-                            failwith argsMs
-                    let emitExpr =
-                        Fable.Emit("isNaN(parseInt($0)) ? [0,false] : [true, parseInt($0)]")
-                        |> Fable.Value
-                    Fable.Apply(emitExpr, [numToParse], Fable.ApplyMeth, info.returnType, info.range)
-                    |> Some
-                    // Alternative to the previous five lines
-                    // "Math.floor(Math.random() * ($1 - $0)) + $0"
-                    // |> Fable.Replacements.Util.emit info <| [min; max]
-                    // |> Some
+                    handleTryParse _com info "parseInt"
+                | _ -> None
+            | "System.Decimal" ->
+                match info.methodName with
+                | "TryParse" ->
+                    handleTryParse _com info "parseFloat"
                 | _ -> None
             | _ -> None
             
